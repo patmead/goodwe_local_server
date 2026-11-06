@@ -79,7 +79,7 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
         elif len(packet) == 0:
             log.info(f"Empty packet from {addr}")
         else:
-            log.warn(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
+            log.warning(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
 
 
     async def handle_homekit_meter_metrics( packet, plaintext ):
