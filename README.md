@@ -21,7 +21,7 @@ It has been tested with the following hardware:
 ## Extending
 Compatibility may be extended to devices other than the ones listed above by adding an appropriate packet type, model number, and sensor data mapping to `sensor.py`.
 
-To assist with this, unrecognised packets and logged to HA's `config/home-assistant.log` for further reverse-engineering.
+To assist with this, unrecognised packets are logged to HA's `config/home-assistant.log` for further reverse-engineering.
 
 ## References
 Many thanks to Scott Leggett for the excellent documentation on GoodWe's data protocol in [Reverse-engineering an encrypted IoT protocol](https://smlx.dev/posts/goodwe-sems-protocol-teardown/)

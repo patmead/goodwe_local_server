@@ -121,7 +121,9 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
                 BinarySensor(   device, '0x2f-0x30',               0x2f, 2      ),
                 BinarySensor(   device, '0x35-0x36',               0x35, 2      ),
                 BinarySensor(   device, '0x37-0x38',               0x37, 2      ),
-                BinarySensor(   device, '0x5b-0x6f',               0x5b, 21     ),
+                BinarySensor(   device, '0x5b-0x5e',               0x5b, 4      ),
+                IntSensor(      device, '0x5f-0x5f',               0x5f, 1      ),
+                BinarySensor(   device, '0x60-0x6f',               0x60, 16     ),
             ]
             async_add_entities( device_sensors[serial] )
 
