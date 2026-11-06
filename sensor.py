@@ -72,12 +72,14 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
             plaintext = cipher.decrypt( ciphertext )
             log.debug(f"plaintext:\n{hexdump(plaintext)}")
 
-        if packet_type == b'\03\04' and model in HOMEKIT_MODELS:
+        if len(packet) == 0:
+            log.info(f"Empty packet from {addr}")
+        elif len(plaintext) == 0:
+            log.warning(f"Undecipherable packet from {addr}:\nRaw:\n{hexdump(packet)}")
+        elif packet_type == b'\03\04' and model in HOMEKIT_MODELS:
             await handle_homekit_meter_metrics( packet, plaintext )
         elif packet_type == b'\01\04' and model == '58000DTA':
             await handle_58000DTA_inverter_metrics( packet, plaintext )
-        elif len(packet) == 0:
-            log.info(f"Empty packet from {addr}")
         else:
             log.warning(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
 
