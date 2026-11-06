@@ -1,4 +1,3 @@
-
 import asyncio
 import logging
 import re
@@ -23,7 +22,7 @@ GOODWE_PORT = 20001
 
 AES_KEY = b'\xff' * 16
 
-SENSOR_TIMEOUT = 60
+SENSOR_TIMEOUT = 300
 
 log = logging.getLogger(__package__)
 
@@ -44,10 +43,47 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
         return server
 
 
+    async def read_full_packet( reader, idle=1.0, initial=30.0 ):
+        """Accumulate TCP segments until the peer pauses or closes."""
+        packet = await asyncio.wait_for( reader.read(1024), initial )
+        while packet:
+            try:
+                chunk = await asyncio.wait_for( reader.read(1024), idle )
+            except asyncio.TimeoutError:
+                break
+            if not chunk:
+                break
+            packet += chunk
+        return packet
+
+
     async def handle_packet( reader, writer ):
         addr = writer.get_extra_info('peername')
-        packet = await reader.read(1024)
+        try:
+            await process_packet( reader, writer, addr )
+        except (ConnectionResetError, BrokenPipeError) as err:
+            log.warning(f"Connection lost from {addr}: {type(err).__name__}")
+        except asyncio.TimeoutError:
+            log.warning(f"Idle connection from {addr}, closing")
+        except (UnicodeDecodeError, ValueError, IndexError) as err:
+            log.warning(f"Malformed packet from {addr}: {type(err).__name__}: {err}")
+        except Exception:
+            log.exception(f"Unhandled error while processing packet from {addr}")
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+
+    async def process_packet( reader, writer, addr ):
+        packet = await read_full_packet( reader )
         log.debug(f"\n\n\nReceived packet from {addr}:\n{hexdump(packet)}")
+
+        if len(packet) == 0:
+            log.debug(f"Empty packet from {addr}")
+            return
 
         if len(packet) and GOODWE_RELAY:
             gw_reader, gw_writer = await asyncio.open_connection( GOODWE_HOST, GOODWE_PORT )
@@ -57,6 +93,10 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
             log.debug(f"Received reply:\n{hexdump(reply)}")
             writer.write( reply )
 
+        if len(packet) < 0x46:
+            log.warning(f"Truncated packet ({len(packet)} bytes) from {addr}, discarding")
+            return
+
         packet_type = packet[ 10 : 12 ]
         model = packet[ 14 : 22 ].decode('ascii')
         serial = packet[ 22 : 30 ].decode('ascii')
@@ -65,19 +105,26 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
         iv = packet[ 0x1e : 0x2e ]
         ciphertext = packet[ 0x34 : -2 ]
         plaintext = b''
-        if len(ciphertext):
+        if len(ciphertext) >= 16 and len(ciphertext) % 16 == 0:
             cipher = AES.new( AES_KEY, AES.MODE_CBC, IV=iv )
             plaintext = cipher.decrypt( ciphertext )
             log.debug(f"plaintext:\n{hexdump(plaintext)}")
+        else:
+            log.warning(f"Undecryptable ciphertext ({len(ciphertext)} bytes) from {addr}, discarding")
+            return
 
-        if packet_type == b'\03\04' and model == '93000HKU':
+        if packet_type == b'\03\04' and model in ('93000HKU', '91000HKU'):
+            if len(plaintext) < 0x70:
+                log.warning(f"Short plaintext ({len(plaintext)} bytes) from {addr}, discarding")
+                return
+            if int.from_bytes( plaintext[ 0x39 : 0x3b ], signed=True ) == 0:
+                log.warning(f"Zero mains voltage from {addr}, discarding frame")
+                return
             await handle_93000HKU_meter_metrics( packet, plaintext )
         elif packet_type == b'\01\04' and model == '58000DTA':
             await handle_58000DTA_inverter_metrics( packet, plaintext )
-        elif len(packet) == 0:
-            log.info(f"Empty packet from {addr}")
         else:
-            log.warn(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
+            log.warning(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
 
 
     async def handle_93000HKU_meter_metrics( packet, plaintext ):
