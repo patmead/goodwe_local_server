@@ -25,6 +25,8 @@ AES_KEY = b'\xff' * 16
 
 SENSOR_TIMEOUT = 60
 
+HOMEKIT_MODELS = { '93000HKU': 'HK3000', '91000HKU': 'HK1000' }
+
 log = logging.getLogger(__package__)
 
 
@@ -70,8 +72,8 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
             plaintext = cipher.decrypt( ciphertext )
             log.debug(f"plaintext:\n{hexdump(plaintext)}")
 
-        if packet_type == b'\03\04' and model == '93000HKU':
-            await handle_93000HKU_meter_metrics( packet, plaintext )
+        if packet_type == b'\03\04' and model in HOMEKIT_MODELS:
+            await handle_homekit_meter_metrics( packet, plaintext )
         elif packet_type == b'\01\04' and model == '58000DTA':
             await handle_58000DTA_inverter_metrics( packet, plaintext )
         elif len(packet) == 0:
@@ -80,14 +82,15 @@ async def async_setup_entry( hass, config_entry, async_add_entities ):
             log.warn(f"Unknown packet {packet_type} from {addr}:\nRaw:\n{hexdump(packet)}\nPlain:\n{hexdump(plaintext)}")
 
 
-    async def handle_93000HKU_meter_metrics( packet, plaintext ):
+    async def handle_homekit_meter_metrics( packet, plaintext ):
+        model = packet[ 14 : 22 ].decode('ascii')
         serial = packet[ 22 : 30 ].decode('ascii')
 
         if serial not in device_sensors:
             device = DeviceInfo(
                 manufacturer = 'GoodWe',
                 model = 'HomeKit',
-                model_id = 'HK3000',
+                model_id = HOMEKIT_MODELS[ model ],
                 name = 'Energy Meter',
                 serial_number = serial,
                 identifiers = {( DOMAIN, serial )}

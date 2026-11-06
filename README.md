@@ -9,6 +9,7 @@ It works by emulating GoodWe's data collection server to accept locally pushed d
 It has been tested with the following hardware:
  - GoodWe DT-Series GW8KAU-DT 3-phase solar inverter
  - GoodWe HomeKit HK3000 3-phase energy meter
+ - GoodWe HomeKit HK1000 energy meter (two CT channels, so L3 sensors read zero)
 
 
 ## Installation
